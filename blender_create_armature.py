@@ -1,42 +1,72 @@
 import bpy
+import mathutils
 
-# Bake + Export !
-obj = bpy.context.object
+# 기존 Armature 삭제
+for obj in bpy.data.objects:
+    if obj.type == 'ARMATURE':
+        bpy.data.objects.remove(obj, do_unlink=True)
 
-if not obj or not obj.animation_data or not obj.animation_data.action:
-    print("❌ 애니메이션 데이터가 없는 오브젝트입니다.")
-else:
-    action = obj.animation_data.action
-    start_frame = int(min(kp.co[0] for fc in action.fcurves for kp in fc.keyframe_points))
-    end_frame = int(max(kp.co[0] for fc in action.fcurves for kp in fc.keyframe_points))
-    bpy.context.scene.frame_start = start_frame
-    bpy.context.scene.frame_end = end_frame
+# 새 Armature 생성
+bpy.ops.object.add(type='ARMATURE', enter_editmode=True)
+armature = bpy.context.object
+armature.name = "HumanArmature"
+armature.show_in_front = True
 
-    bpy.ops.nla.bake(
-        frame_start=start_frame,
-        frame_end=end_frame,
-        only_selected=True,
-        visual_keying=True,
-        clear_constraints=True,
-        use_current_action=True,
-        bake_types={'POSE'}
-    )
-    
-# === 사용자 설정 ===
-    bpy.ops.export_scene.fbx(
-        filepath="C:/Users/leechaehyeon/Desktop/Motion/fbx1.fbx",
-        use_selection=False,
-        global_scale=1.0,
-        apply_unit_scale=True,
-        apply_scale_options='FBX_SCALE_ALL',
-        object_types={'ARMATURE'},
-        bake_anim=True,
-        bake_anim_use_all_actions=False,
-        bake_anim_use_nla_strips=False,
-        bake_anim_force_startend_keying=True,
-        add_leaf_bones=False,
-        armature_nodetype='ROOT',
-        path_mode='AUTO'
-    )
+edit_bones = armature.data.edit_bones
 
-    print("✅ FBX 내보내기 완료")
+# 관절 위치 샘플
+joint_positions = {
+    "hips": (0, 0, 0),
+    "spine": (0, 0, 0.1),
+    "chest": (0, 0, 0.25),
+    "neck": (0, 0, 0.4),
+    "head": (0, 0, 0.55),
+    "left_shoulder": (-0.1, 0, 0.3),
+    "left_elbow": (-0.2, 0, 0.25),
+    "left_wrist": (-0.3, 0, 0.2),
+    "right_shoulder": (0.1, 0, 0.3),
+    "right_elbow": (0.2, 0, 0.25),
+    "right_wrist": (0.3, 0, 0.2),
+    "left_hip": (-0.1, 0, -0.1),
+    "left_knee": (-0.1, 0, -0.3),
+    "left_ankle": (-0.1, 0, -0.5),
+    "right_hip": (0.1, 0, -0.1),
+    "right_knee": (0.1, 0, -0.3),
+    "right_ankle": (0.1, 0, -0.5),
+}
+
+bone_hierarchy = [
+    ("hips", "spine"),
+    ("spine", "chest"),
+    ("chest", "neck"),
+    ("neck", "head"),
+    ("chest", "left_shoulder"),
+    ("left_shoulder", "left_elbow"),
+    ("left_elbow", "left_wrist"),
+    ("chest", "right_shoulder"),
+    ("right_shoulder", "right_elbow"),
+    ("right_elbow", "right_wrist"),
+    ("hips", "left_hip"),
+    ("left_hip", "left_knee"),
+    ("left_knee", "left_ankle"),
+    ("hips", "right_hip"),
+    ("right_hip", "right_knee"),
+    ("right_knee", "right_ankle"),
+]
+
+# 본 생성
+for name in joint_positions:
+    bone = edit_bones.new(name)
+    head = mathutils.Vector(joint_positions[name])
+    tail = head + mathutils.Vector((0, 0.02, 0))  # 작게라도 길이 주기
+    bone.head = head
+    bone.tail = tail
+
+# 부모 설정 (❗️use_connect=False)
+for parent, child in bone_hierarchy:
+    if parent in edit_bones and child in edit_bones:
+        edit_bones[child].parent = edit_bones[parent]
+        edit_bones[child].use_connect = False  # 위치 독립 설정
+        
+
+bpy.ops.object.mode_set(mode='OBJECT')
